@@ -4,6 +4,14 @@ from flask import request
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 from flask import session, redirect, url_for
+from flask import flash
+
+import os
+
+UPLOAD_FOLDER = 'static/uploads'
+
+
+
  # Use a more secure key in production
 
 
@@ -11,6 +19,7 @@ from flask import session, redirect, url_for
 app = Flask(__name__)
 
 app.secret_key = 'supersecretkey123' 
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 @app.route('/')
 def home():
@@ -65,12 +74,23 @@ def login():
         conn.close()
 
         if user and check_password_hash(user[4], password):
-            session['username'] = user[1]  # username from DB
+            session['username'] = user[1]
+            session['email'] = user[2]
+            
+            flash('✅ Login successful!', 'success')
             return redirect('/dashboard')
         else:
-            return "❌ Invalid email or password"
+            flash('❌ Invalid email or password', 'error')
+            return redirect('/login')
 
+    # GET request: just show login form — NO FLASH HERE
     return render_template('login.html')
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    session.pop('email', None)
+    flash('✅ You have been logged out.', 'success')
+    return redirect('/login')
 
 
 @app.route('/submit', methods=['POST'])
@@ -111,6 +131,37 @@ def dashboard():
         return render_template('dashboard.html', username=username)
     else:
         return redirect(url_for('login'))
+    
+
+@app.route('/upload')
+def upload_page():
+    return render_template('upload.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        flash('❌ No file part', 'error')
+        return redirect('/upload')
+
+    file = request.files['file']
+
+    if file.filename == '':
+        flash('⚠️ No file selected', 'error')
+        return redirect('/upload')
+
+    # Save file
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(filepath)
+
+    flash('✅ File uploaded successfully!', 'success')
+    return redirect('/files')
+
+@app.route('/files')
+def list_files():
+    files = os.listdir(app.config['UPLOAD_FOLDER'])
+    return render_template('files.html', files=files)
+
+
 
 
 
